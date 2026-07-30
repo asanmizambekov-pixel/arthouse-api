@@ -6,44 +6,75 @@ const { createClient } = require('@supabase/supabase-js');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ✅ НАСТРОЙКА CORS — РАЗРЕШАЕМ ВСЕ ЗАПРОСЫ
+// ✅ НАСТРОЙКА CORS — МАКСИМАЛЬНО РАЗРЕШАЮЩАЯ
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// ✅ ОБРАБОТКА OPTIONS ЗАПРОСОВ (для CORS)
+// Обработка preflight запросов
 app.options('*', cors());
 
 app.use(express.json());
 
 // ============================================================
-// Настройка Supabase
+// НАСТРОЙКА SUPABASE
 // ============================================================
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
+
+console.log('🔍 Проверка переменных:');
+console.log('SUPABASE_URL:', supabaseUrl ? '✅ установлен' : '❌ ОТСУТСТВУЕТ');
+console.log('SUPABASE_KEY:', supabaseKey ? '✅ установлен' : '❌ ОТСУТСТВУЕТ');
+
+if (!supabaseUrl || !supabaseKey) {
+    console.error('❌ КРИТИЧЕСКАЯ ОШИБКА: Переменные окружения не заданы!');
+    process.exit(1);
+}
+
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ============================================================
-// API ЭНДПОИНТЫ
+// ТЕСТОВЫЙ МАРШРУТ (для проверки, что сервер работает)
+// ============================================================
+app.get('/', (req, res) => {
+    res.json({
+        status: 'ok',
+        message: 'АртХаус API работает!',
+        endpoints: {
+            GET: '/members',
+            POST: '/members',
+            DELETE: '/members',
+            health: '/health'
+        }
+    });
+});
+
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ============================================================
+// ОСНОВНЫЕ МАРШРУТЫ
 // ============================================================
 
 // 📥 GET: получить всех участников
 app.get('/members', async (req, res) => {
     try {
-        console.log('📥 GET /members запрос получен');
+        console.log('📥 GET /members');
         const { data, error } = await supabase
             .from('members')
             .select('name, date')
             .order('name');
         
         if (error) {
-            console.error('❌ Ошибка Supabase:', error);
-            throw error;
+            console.error('❌ Ошибка Supabase:', error.message);
+            return res.status(500).json({ success: false, error: error.message });
         }
+        
         console.log(`✅ Найдено ${data?.length || 0} участников`);
-        res.json({ success: true, data });
+        res.json({ success: true, data: data || [] });
     } catch (error) {
         console.error('❌ Ошибка:', error.message);
         res.status(500).json({ success: false, error: error.message });
@@ -67,7 +98,10 @@ app.post('/members', async (req, res) => {
             .eq('name', name)
             .maybeSingle();
         
-        if (findError && findError.code !== 'PGRST116') throw findError;
+        if (findError && findError.code !== 'PGRST116') {
+            console.error('❌ Ошибка поиска:', findError.message);
+            throw findError;
+        }
         
         if (existing) {
             // Обновляем дату
@@ -110,14 +144,15 @@ app.delete('/members', async (req, res) => {
     }
 });
 
-// 🏥 Проверка здоровья
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-// Запускаем сервер
+// ============================================================
+// ЗАПУСК СЕРВЕРА
+// ============================================================
 app.listen(PORT, () => {
     console.log(`🚀 Сервер запущен на порту ${PORT}`);
-    console.log(`📊 Supabase URL: ${supabaseUrl ? '✅' : '❌ не задан'}`);
-    console.log(`🔑 Supabase Key: ${supabaseKey ? '✅' : '❌ не задан'}`);
+    console.log(`🌐 Откройте: https://arthouse-api.onrender.com`);
+});
+
+// Обработка ошибок
+process.on('uncaughtException', (err) => {
+    console.error('❌ Uncaught Exception:', err);
 });
