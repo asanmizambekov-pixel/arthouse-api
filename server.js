@@ -6,8 +6,16 @@ const { createClient } = require('@supabase/supabase-js');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Настройки CORS (разрешаем запросы с любых сайтов)
-app.use(cors());
+// ✅ НАСТРОЙКА CORS — РАЗРЕШАЕМ ВСЕ ЗАПРОСЫ
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// ✅ ОБРАБОТКА OPTIONS ЗАПРОСОВ (для CORS)
+app.options('*', cors());
+
 app.use(express.json());
 
 // ============================================================
@@ -22,24 +30,31 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // ============================================================
 
 // 📥 GET: получить всех участников
-app.get('/api/members', async (req, res) => {
+app.get('/members', async (req, res) => {
     try {
+        console.log('📥 GET /members запрос получен');
         const { data, error } = await supabase
             .from('members')
             .select('name, date')
             .order('name');
         
-        if (error) throw error;
+        if (error) {
+            console.error('❌ Ошибка Supabase:', error);
+            throw error;
+        }
+        console.log(`✅ Найдено ${data?.length || 0} участников`);
         res.json({ success: true, data });
     } catch (error) {
+        console.error('❌ Ошибка:', error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
 // 📤 POST: добавить участника
-app.post('/api/members', async (req, res) => {
+app.post('/members', async (req, res) => {
     try {
         const { name, date } = req.body;
+        console.log(`📤 POST /members: ${name}, ${date}`);
         
         if (!name) {
             return res.status(400).json({ success: false, error: 'Имя обязательно' });
@@ -73,31 +88,36 @@ app.post('/api/members', async (req, res) => {
             res.json({ success: true, name, date, action: 'added' });
         }
     } catch (error) {
+        console.error('❌ Ошибка:', error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
 // 🗑️ DELETE: очистить всех
-app.delete('/api/members', async (req, res) => {
+app.delete('/members', async (req, res) => {
     try {
+        console.log('🗑️ DELETE /members');
         const { error } = await supabase
             .from('members')
             .delete()
-            .neq('id', 0); // удаляем все записи
+            .neq('id', 0);
         
         if (error) throw error;
         res.json({ success: true, action: 'cleared' });
     } catch (error) {
+        console.error('❌ Ошибка:', error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
 // 🏥 Проверка здоровья
-app.get('/api/health', (req, res) => {
+app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Запускаем сервер
 app.listen(PORT, () => {
     console.log(`🚀 Сервер запущен на порту ${PORT}`);
+    console.log(`📊 Supabase URL: ${supabaseUrl ? '✅' : '❌ не задан'}`);
+    console.log(`🔑 Supabase Key: ${supabaseKey ? '✅' : '❌ не задан'}`);
 });
